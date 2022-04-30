@@ -1,0 +1,7 @@
+#include <esp_system.h>
+#define CAN_BUS_TX_GPIO_NUM  GPIO_NUM_22
+#define CAN_BUS_RX_GPIO_NUM  GPIO_NUM_21
+#define UART_TXD_PIN GPIO_NUM_1
+#define UART_RXD_PIN GPIO_NUM_3
+#define UART_CHANNEL UART_NUM_0
+

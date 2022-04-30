@@ -1,6 +1,8 @@
 #ifndef _CAN_BUS_H
 #define _CAN_BUS_H
 
+#include "defines.h"
+
 #include <stdio.h>
 #include <stdlib.h> 
 #include <freertos/FreeRTOS.h> 
@@ -13,31 +15,31 @@
 #include <driver/twai.h>
 #include "comms.h"
 
-#define TX_GPIO_NUM                     GPIO_NUM_22
-#define RX_GPIO_NUM                     GPIO_NUM_21
-#define TAG                             "CAN LOGGER"
+#define TAG "CAN LOGGER"
 
+typedef struct can_config_t { 
+    twai_general_config_t g_config; 
+    twai_timing_config_t t_config; 
+    twai_filter_config_t f_config; 
+} can_config_t; 
 
-// static const twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL(); 
-// static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS(); 
-static const twai_general_config_t g_config = { 
+static const twai_general_config_t default_g_config = { 
     .mode = TWAI_MODE_LISTEN_ONLY, 
-    .rx_io = RX_GPIO_NUM, 
-    .tx_io = TX_GPIO_NUM, 
+    .rx_io = CAN_BUS_RX_GPIO_NUM, 
+    .tx_io = CAN_BUS_TX_GPIO_NUM, 
     .clkout_io = TWAI_IO_UNUSED, 
     .bus_off_io = TWAI_IO_UNUSED,
-    .rx_queue_len = 5, 
-    .tx_queue_len = 0, 
-    .alerts_enabled = TWAI_ALERT_NONE, 
+    .rx_queue_len = 10, 
+    .tx_queue_len = 10, 
+    .alerts_enabled = TWAI_ALERT_ALL, 
     .clkout_divider = 0
 };
 
-// static const twai_general_config_t g_config = TWAI_GENERAL_CONFIG_DEFAULT(GPIO_NUM_21, GPIO_NUM_22, TWAI_MODE_NORMAL); 
-static const twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS(); 
-static const twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL(); 
+static const twai_timing_config_t default_t_config = TWAI_TIMING_CONFIG_500KBITS(); 
+static const twai_filter_config_t default_f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL(); 
 
-void can_bus_init(settings_t settings); 
+esp_err_t can_bus_init(can_config_t setting); 
 int can_bus_update(); 
-void can_bus_cleanup(); 
+esp_err_t can_bus_cleanup(); 
 
 #endif

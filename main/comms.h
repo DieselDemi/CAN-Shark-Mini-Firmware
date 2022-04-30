@@ -1,26 +1,23 @@
 #ifndef _COMMS_H_
 #define _COMMS_H_
 
-//Driver Status
-#define CAN_DRIVER_STARTED 0x01 
-#define CAN_DRIVER_STOPPED 0x02
-#define CAN_DRIVER_INSTALLED 0x03
-#define CAN_DRIVER_UNINSTALLED 0x04
+#include "driver/uart.h"
+#include "driver/gpio.h"
 
-#define CAN_NO_MESSAGE 0x10
-#define CAN_REMOTE_FRAME 0x11
+static const int RX_BUF_SIZE = 1024;
+static const int TX_BUF_SIZE = 2048; //TODO(Demi): Calculate the maximum message size to be sent to the host pc
 
-#define CAN_MESSAGE_START 0x15
+char* com_buffer; 
 
-#define CAN_END_OF_MESSAGE 0x1F
+void comms_update_tx(); 
+void comms_update_rx(uint8_t *data); 
 
-typedef struct settings_t { 
-    int speed;
-    int filter;  
-} settings_t; 
+void copy_to_comms_buffer(char* data);
 
-void send_data(int data);
+esp_err_t comms_init(); 
+int send_data(char* data); 
+int send_data_with_length(char* data, size_t len);
 
-settings_t get_settings(); 
+void clear_screen(); 
 
 #endif
