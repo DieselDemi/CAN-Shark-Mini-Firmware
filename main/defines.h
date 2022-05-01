@@ -5,3 +5,11 @@
 #define UART_RXD_PIN GPIO_NUM_3
 #define UART_CHANNEL UART_NUM_0
 
+#define RX_BUF_SIZE 1024
+#define TX_BUF_SIZE 128 //TODO(Demi): Calculate the maximum message size to be sent to the host pc
+#define MESSAGE_QUEUE_LEN 2048
+
+#define CAN_TICKS_TO_WAIT 100
+
+// #define CAN_DEBUG
+#define COMMS_DEBUG

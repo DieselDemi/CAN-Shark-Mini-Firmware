@@ -2,9 +2,11 @@
 #define _CAN_BUS_H
 
 #include "defines.h"
+#include "comms.h"
 
 #include <stdio.h>
 #include <stdlib.h> 
+#include <stdbool.h>
 #include <freertos/FreeRTOS.h> 
 #include <freertos/task.h> 
 #include <freertos/queue.h>
@@ -13,9 +15,8 @@
 #include <esp_log.h>
 #include <driver/gpio.h> 
 #include <driver/twai.h>
-#include "comms.h"
 
-#define TAG "CAN LOGGER"
+#define TAG "CAN BUS"
 
 typedef struct can_config_t { 
     twai_general_config_t g_config; 
@@ -39,7 +40,7 @@ static const twai_timing_config_t default_t_config = TWAI_TIMING_CONFIG_500KBITS
 static const twai_filter_config_t default_f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL(); 
 
 esp_err_t can_bus_init(can_config_t setting); 
-int can_bus_update(); 
+int can_bus_update(bool update); 
 esp_err_t can_bus_cleanup(); 
 
 #endif

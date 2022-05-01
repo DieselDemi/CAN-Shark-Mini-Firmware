@@ -3,20 +3,24 @@
 
 #include "driver/uart.h"
 #include "driver/gpio.h"
+#include "defines.h"
 
-static const int RX_BUF_SIZE = 1024;
-static const int TX_BUF_SIZE = 2048; //TODO(Demi): Calculate the maximum message size to be sent to the host pc
+typedef struct comms_status_t { 
+    bool sniff; 
+} comms_status_t; 
 
-char* com_buffer; 
+typedef struct comms_message_t { 
+    uint8_t* data;
+    size_t data_length; 
+} comms_message_t; 
 
 void comms_update_tx(); 
-void comms_update_rx(uint8_t *data); 
+void comms_update_rx(comms_status_t* status, uint8_t *data); 
 
-void copy_to_comms_buffer(char* data);
+comms_message_t create_message(comms_message_t *src, void *data, size_t len); 
+void add_message(comms_message_t message); 
 
 esp_err_t comms_init(); 
-int send_data(char* data); 
-int send_data_with_length(char* data, size_t len);
 
 void clear_screen(); 
 

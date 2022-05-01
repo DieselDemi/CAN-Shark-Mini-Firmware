@@ -1,6 +1,8 @@
 #include "can_bus.h"
 #include "comms.h"
 
+#include <string.h>
+
 esp_err_t can_bus_init(can_config_t settings) { 
     esp_err_t last_err = ESP_OK; 
     last_err = twai_driver_install(&settings.g_config, &settings.t_config, &settings.f_config);
@@ -13,28 +15,42 @@ esp_err_t can_bus_init(can_config_t settings) {
     return last_err; 
 }
 
-int can_bus_update() { 
+int can_bus_update(bool update) {
+    if(!update)
+        return 1; 
+
     twai_message_t message;     
-    
-    if(!(twai_receive(&message, 1) == ESP_OK)) {
-        copy_to_comms_buffer("NO MSG");
-        // send_data(CAN_NO_MESSAGE); 
+    comms_message_t com_message;
+
+    if(!(twai_receive(&message, CAN_TICKS_TO_WAIT) == ESP_OK)) {
         return 1; 
     }
 
-    // send_data(CAN_MESSAGE_START); 
-    send_data(message.identifier);
+    if(!message.rtr) {
+        uint8_t identifier_arr[4]; 
+        identifier_arr[0] = (message.identifier >> 24) & 0xff; 
+        identifier_arr[1] = (message.identifier >> 16) & 0xff; 
+        identifier_arr[2] = (message.identifier >> 8) & 0xff; 
+        identifier_arr[3] = (message.identifier) & 0xff; 
 
-    if(!(message.rtr)) { 
+        uint8_t complete_arr[message.data_length_code + 4]; 
+
+        memccpy(complete_arr, identifier_arr, 0, 4); 
+        memccpy(complete_arr, message.data, 4, message.data_length_code); 
+
+        create_message(&com_message, complete_arr, message.data_length_code + 4); 
+        add_message(com_message);
+
+#ifdef CAN_DEBUG
         for(int i = 0; i < message.data_length_code; i++) { 
-            send_data(message.data[i]); 
+            printf("%i ", message.data[i]);  
         }
-    } else { 
-        // send_data(CAN_REMOTE_FRAME); 
-    }
+        printf("\n"); 
+#endif
 
-    // send_data(CAN_END_OF_MESSAGE);
-    
+    } else { 
+        //TODO(Demi): Send remote frame status
+    }    
 
     return 1; 
 }

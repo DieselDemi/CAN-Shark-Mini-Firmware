@@ -1,17 +1,33 @@
 #include "comms.h"
 
-#include "defines.h"
-
 #include <string.h>
 #include <stdbool.h>
 
+#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
+#include <esp_log.h>
+
+int send_string(char* data); 
+int send_data_with_length(uint8_t* data, size_t len); 
 
 bool comms_initialized = false; 
 
+typedef struct comms_message_queue_t { 
+    comms_message_t* messages; 
+    size_t count; 
+} comms_message_queue_t; 
+
+comms_message_queue_t message_queue; 
+
+/**
+ * @brief Initialize the communications over USB via UART
+ * 
+ * @return esp_err_t ESP_OK if everything worked
+ */
 esp_err_t comms_init() { 
-    //Initialize the communications transmit buffer
-    com_buffer = (char*)malloc(sizeof(char) * TX_BUF_SIZE);
-    memset(com_buffer, 0, sizeof(char) * TX_BUF_SIZE);
+    //Allocate the message queue
+    message_queue.messages = (comms_message_t*)malloc(sizeof(comms_message_t) * MESSAGE_QUEUE_LEN); 
+    memset(message_queue.messages, 0, sizeof(comms_message_t) * MESSAGE_QUEUE_LEN);
+    message_queue.count = 0; 
 
     const uart_config_t uart_config = {
         .baud_rate = 115200,
@@ -34,46 +50,123 @@ esp_err_t comms_init() {
     return last_err; 
 }
 
+/**
+ * @brief Update method for the transmit task
+ * 
+ */
 void comms_update_tx() { 
-    if(com_buffer != NULL)
-    {
-        send_data(com_buffer);
-        send_data("\r\n");
+    for(size_t i = 0; i < message_queue.count; i++) {
+        
+#ifdef COMMS_DEBUG
+        for(size_t j = 0; j < message_queue.messages[i].data_length; j++) { 
+            printf("%i ", message_queue.messages[i].data[j]);  
+        }
+        printf("\n");
+#endif
+
+        send_data_with_length(message_queue.messages[i].data, message_queue.messages[i].data_length); 
+        send_string("\r\n");
+
+        free(message_queue.messages[i].data); //Free the shit
     }
+
+    //Clear the message queue 
+    message_queue.count = 0; 
 }
 
-void comms_update_rx(uint8_t *data) { 
+/**
+ * @brief Update method for the recieve task
+ * 
+ * @param data 
+ */
+void comms_update_rx(comms_status_t *status, uint8_t *data) { 
     const int rx_bytes = uart_read_bytes(UART_CHANNEL, data, RX_BUF_SIZE, 100 / portTICK_PERIOD_MS);
     if (rx_bytes > 0) {
         data[rx_bytes] = 0;
-        send_data((char*)data); 
+
+        if(*data == (uint8_t)'m') {
+            status->sniff = true; 
+            send_string("starting!");
+        } 
+        if(*data == (uint8_t)'n') {
+            status->sniff = false; 
+            send_string("stopping!");
+        }
     }
 }
 
-void copy_to_comms_buffer(char* data) {  
-    const int len = strlen(data); 
-    
-    assert(len < TX_BUF_SIZE); 
+/**
+ * @brief Create a message object
+ * 
+ * @param src 
+ * @param data 
+ * @param len 
+ * @return comms_message_t 
+ */
+comms_message_t create_message(comms_message_t* src, void* data, size_t len) { 
+    uint8_t len_arr[4]; 
+    len_arr[0] = (len >> 24) & 0xff; 
+    len_arr[1] = (len >> 16) & 0xff; 
+    len_arr[2] = (len >> 8) & 0xff; 
+    len_arr[3] = (len) & 0xff; 
 
-    memccpy(com_buffer, data, 0, len); 
+    src->data = (uint8_t*)malloc(sizeof(uint8_t) * len + 4); 
+    
+    memccpy(src->data, len_arr, 0, 4); 
+    memccpy(src->data, data, 4, len); 
+
+    src->data_length = len + 4; 
+
+    return *src; 
 }
 
-int send_data(char* data) { 
+/**
+ * @brief Add a message to the message queue
+ * 
+ * @param message message data
+ */
+void add_message(comms_message_t message) {
+    if(message_queue.count > MESSAGE_QUEUE_LEN) {
+        ESP_LOGE("COMMS", "MESSAGE QUEUE OVERRUN"); 
+        return; 
+    }
+
+    message_queue.messages[message_queue.count++] = message; 
+}
+
+/**
+ * @brief PRIVATE Send the data over uart
+ * 
+ * @param data 
+ * @return int 
+ */
+int send_string(char* data) { 
     if(!comms_initialized)
         return 0; 
 
     const int len = strlen(data);
 
-    return send_data_with_length(data, len); 
+    return send_data_with_length((uint8_t*)data, len); 
 }
 
-int send_data_with_length(char* data, size_t len) {
-    if(!comms_initialized)
+/**
+ * @brief PRIVATE Send the data over uart with specified length
+ * 
+ * @param data 
+ * @param len 
+ * @return int 
+ */
+int send_data_with_length(uint8_t* data, size_t len) {
+    if(!comms_initialized || len <= 0)
         return 0; 
 
     return uart_write_bytes(UART_CHANNEL, data, len);
 }
 
+/**
+ * @brief Clear the terminal screen
+ * 
+ */
 void clear_screen() { 
-    send_data("\33[2J"); 
+    send_string("\33[2J"); 
 }
