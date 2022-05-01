@@ -35,8 +35,8 @@ int can_bus_update(bool update) {
 
         uint8_t complete_arr[message.data_length_code + 4]; 
 
-        memccpy(complete_arr, identifier_arr, 0, 4); 
-        memccpy(complete_arr, message.data, 4, message.data_length_code); 
+        memcpy(complete_arr, identifier_arr, 4); 
+        memcpy(complete_arr + 4, message.data, message.data_length_code); 
 
         create_message(&com_message, complete_arr, message.data_length_code + 4); 
         add_message(com_message);

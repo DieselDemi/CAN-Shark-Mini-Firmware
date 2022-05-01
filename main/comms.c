@@ -112,8 +112,8 @@ comms_message_t create_message(comms_message_t* src, void* data, size_t len) {
 
     src->data = (uint8_t*)malloc(sizeof(uint8_t) * len + 4); 
     
-    memccpy(src->data, len_arr, 0, 4); 
-    memccpy(src->data, data, 4, len); 
+    memcpy(src->data, len_arr, 4); 
+    memcpy(src->data + 4, data, len); 
 
     src->data_length = len + 4; 
 
