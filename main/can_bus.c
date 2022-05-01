@@ -3,90 +3,140 @@
 
 #include <string.h>
 
+/// Private variables
 long long microsecond_time; 
+long long last_time; 
 
-comms_message_t generate_message(long long time, can_message_type message_type, uint32_t id, void* data, size_t data_len); 
+esp_err_t last_err; 
 
-esp_err_t can_bus_init(can_config_t settings) { 
-    esp_err_t last_err = ESP_OK; 
-    last_err = twai_driver_install(&settings.g_config, &settings.t_config, &settings.f_config);
-    ESP_LOGI(TAG, "Driver installed");
+/// Private function pre declarations
+esp_err_t generate_message(comms_message_t *message, long long time, can_message_type message_type, uint32_t id, void* data, size_t data_len); 
+
+/**
+ * @brief Initialize the CAN Bus driver
+ * 
+ * @param settings 
+ * @return esp_err_t 
+ */
+esp_err_t can_bus_init(can_config_t settings) {  
+    twai_status_info_t status_info; 
     
-    last_err = twai_start();
-    ESP_LOGI(TAG, "Driver started");
-    // send_data(CAN_DRIVER_STARTED);
+    
+    //Set the log level
+#ifdef CAN_DEBUG
+    esp_log_level_set(TAG, ESP_LOG_VERBOSE);
+#else
+    esp_log_level_set(TAG, ESP_LOG_NONE);
+#endif
+    
+    //Get the current twai state return if something went wrong or already running
+    last_err = twai_get_status_info(&status_info); 
+    if((last_err != ESP_OK && last_err != ESP_ERR_INVALID_STATE) || status_info.state == TWAI_STATE_RUNNING) 
+        return last_err; 
+        
+    //Install the driver based on the current provided configuration
+    last_err = twai_driver_install(&settings.g_config, &settings.t_config, &settings.f_config);
 
+    ESP_LOGI(TAG, "Driver installed");
+
+    //Start the CAN bus driver
+    last_err = twai_start();
+
+    ESP_LOGI(TAG, "Driver started");
+
+    //Initialize our time variables
     microsecond_time = 0; 
+    last_time = 0; 
 
     return last_err; 
 }
 
-long long last_time = 0; 
-
-int can_bus_update(bool update) {
-    if(!update)
-        return 1; 
-
+/**
+ * @brief Update the can bus 
+ * 
+ * @return esp_err_t 
+ */
+esp_err_t can_bus_update() {
     twai_message_t message;     
     comms_message_t com_message;
 
-    if(!(twai_receive(&message, CAN_TICKS_TO_WAIT) == ESP_OK)) {
-        return 1; 
+    last_err = ESP_OK; 
+
+    if(!(last_err = twai_receive(&message, CAN_TICKS_TO_WAIT) == ESP_OK)) {
+        return ESP_OK; 
     }
 
+    //If the message is not a remote CAN frame, send the regular data
+    //else send a message containing just the time, ID, and type.  
     if(!message.rtr) {
         microsecond_time = esp_timer_get_time(); 
 
-        com_message = generate_message(microsecond_time - last_time, STANDARD_FRAME, message.identifier, message.data, message.data_length_code);
+        generate_message(&com_message, microsecond_time - last_time, STANDARD_FRAME, message.identifier, message.data, message.data_length_code);
         add_message(com_message);
 
-#ifdef CAN_DEBUG
-        for(int i = 0; i < message.data_length_code; i++) { 
-            printf("%i ", message.data[i]);  
-        }
-        printf("\n"); 
-#endif
+// #ifdef CAN_DEBUG
+//         for(int i = 0; i < message.data_length_code; i++) { 
+//             printf("%i ", message.data[i]);  
+//         }
+//         printf("\n"); 
+// #endif
         last_time = microsecond_time; 
     } else { 
-        //TODO(Demi): Send remote frame status
         microsecond_time = esp_timer_get_time(); 
 
-        com_message = generate_message(microsecond_time - last_time, REMOTE_FRAME, message.identifier, NULL, 0);
+        generate_message(&com_message, microsecond_time - last_time, REMOTE_FRAME, message.identifier, NULL, 0);
         add_message(com_message);
 
         last_time = microsecond_time; 
     }    
 
-    return 1; 
+    return ESP_OK; 
 }
 
+/**
+ * @brief Cleanup the CAN bus driver
+ * 
+ * @return esp_err_t Error response
+ */
 esp_err_t can_bus_cleanup() { 
-    esp_err_t last_err; 
+    twai_status_info_t status_info; 
+    
+    //Get the current twai state, and if its already stopped ignore don't try to
+    //stop it again.  
+    last_err = twai_get_status_info(&status_info); 
+    
+    if(last_err == ESP_ERR_INVALID_STATE)
+        return ESP_OK; 
+    
+    if(last_err != ESP_OK || status_info.state == TWAI_STATE_STOPPED)
+        return last_err; 
 
     //Stop and uninstall TWAI driver
     last_err = twai_stop();
     
     ESP_LOGI(TAG, "Driver stopped");
+    
     // send_data(CAN_DRIVER_STOPPED);
     last_err = twai_driver_uninstall();
 
     ESP_LOGI(TAG, "Driver uninstalled");
+
     // send_data(CAN_DRIVER_UNINSTALLED);
     return last_err; 
 }
 
 /**
- * @brief Generate a message from can data
+ * @brief Generate a comms message from CAN_BUS data
  * 
+ * @param message 
  * @param time 
+ * @param message_type 
  * @param id 
  * @param data 
  * @param data_len 
- * @return comms_message_t 
+ * @return esp_err_t 
  */
-comms_message_t generate_message(long long time, can_message_type message_type, uint32_t id, void* data, size_t data_len) { 
-    comms_message_t message; 
-
+esp_err_t generate_message(comms_message_t *message, long long time, can_message_type message_type, uint32_t id, void* data, size_t data_len) { 
     uint16_t type = (uint16_t)message_type;
 
     uint8_t type_arr[2]; 
@@ -116,7 +166,7 @@ comms_message_t generate_message(long long time, can_message_type message_type, 
     memcpy(data_arr + 10, id_arr, 4); 
     memcpy(data_arr + 14, data, data_len); 
 
-    create_message(&message, data_arr, data_len + 14); 
+    create_message(message, data_arr, data_len + 14); 
 
-    return message; 
+    return ESP_OK; 
 }

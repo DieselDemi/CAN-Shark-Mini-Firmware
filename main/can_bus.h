@@ -2,7 +2,6 @@
 #define _CAN_BUS_H
 
 #include "defines.h"
-#include "comms.h"
 
 #include <stdio.h>
 #include <stdlib.h> 
@@ -45,7 +44,7 @@ static const twai_timing_config_t default_t_config = TWAI_TIMING_CONFIG_500KBITS
 static const twai_filter_config_t default_f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL(); 
 
 esp_err_t can_bus_init(can_config_t setting); 
-int can_bus_update(bool update); 
+esp_err_t can_bus_update(); 
 esp_err_t can_bus_cleanup(); 
 
 #endif

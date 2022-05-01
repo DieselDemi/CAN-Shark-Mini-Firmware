@@ -11,5 +11,5 @@
 
 #define CAN_TICKS_TO_WAIT 100
 
-// #define CAN_DEBUG
-#define COMMS_DEBUG
+#define CAN_DEBUG
+// #define COMMS_DEBUG

@@ -3,7 +3,6 @@
 #include <string.h>
 #include <stdbool.h>
 
-#define LOG_LOCAL_LEVEL ESP_LOG_VERBOSE
 #include <esp_log.h>
 
 int send_string(char* data); 
@@ -88,11 +87,9 @@ void comms_update_rx(comms_status_t *status, uint8_t *data) {
 
         if(*data == (uint8_t)'m') {
             status->sniff = true; 
-            send_string("starting!");
         } 
         if(*data == (uint8_t)'n') {
             status->sniff = false; 
-            send_string("stopping!");
         }
     }
 }
@@ -105,7 +102,7 @@ void comms_update_rx(comms_status_t *status, uint8_t *data) {
  * @param len 
  * @return comms_message_t 
  */
-comms_message_t create_message(comms_message_t* src, void* data, size_t len) { 
+esp_err_t create_message(comms_message_t* src, void* data, size_t len) { 
 
     uint16_t crc16 = calculate_crc16(data, len);
     uint8_t crc_arr[2]; 
@@ -126,7 +123,7 @@ comms_message_t create_message(comms_message_t* src, void* data, size_t len) {
 
     src->data_length = len + 6; 
 
-    return *src; 
+    return ESP_OK; 
 }
 
 /**
