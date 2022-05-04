@@ -9,6 +9,7 @@
 #include "defines.h"
 #include "comms.h"
 #include "can_bus.h"
+#include "ota.h"
 
 TaskHandle_t sniff_handle;
 
@@ -29,12 +30,13 @@ comms_status_t prog_status = {
 
 void init(void) {
     ESP_ERROR_CHECK(comms_init()); 
+    ESP_ERROR_CHECK(ota_do_after_update());
 
     //clear_screen();
 }
 
 static void can_bus_task(void *arg) { 
-    ESP_ERROR_CHECK(can_bus_init(can_bus_config)); 
+    // ESP_ERROR_CHECK(can_bus_init(can_bus_config)); 
 
     while(1) {
         if(!prog_status.sniff)
@@ -55,16 +57,11 @@ static void can_bus_task(void *arg) {
 
 static void comms_tx_task(void *arg)
 {
-    uint8_t* data = (uint8_t*) malloc(RX_BUF_SIZE + 1); //Allocate a recieve buffer for the max buffer size pluss null
-
     while (1) {
-        comms_update_rx(&prog_status, data);
         comms_update_tx(); 
         
-        // vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
-    free(data);
-
 }
 
 static void comms_rx_task(void *arg)
@@ -81,8 +78,8 @@ static void comms_rx_task(void *arg)
 void app_main(void)
 {
     init();
+
     xTaskCreatePinnedToCore(can_bus_task, "canbus", 1024*2, NULL, configMAX_PRIORITIES, &sniff_handle, 1); 
-    // xTaskCreate(can_bus_task, "canbus_sniff_task", 1024*2, NULL, configMAX_PRIORITIES, &sniff_handle); 
     xTaskCreatePinnedToCore(comms_tx_task, "uart_tx_task", 1024*2, NULL, configMAX_PRIORITIES-1, NULL, 0);
-    // xTaskCreatePinnedToCore(comms_rx_task, "uart_rx_task", 1024*2, NULL, configMAX_PRIORITIES-2, NULL, 0);
+    xTaskCreatePinnedToCore(comms_rx_task, "uart_rx_task", 1024*2, NULL, configMAX_PRIORITIES-2, NULL, 0);
 }

@@ -57,14 +57,7 @@ esp_err_t comms_init() {
  */
 void comms_update_tx() { 
     for(size_t i = 0; i < message_queue.count; i++) {
-        
-#ifdef COMMS_DEBUG
-        for(size_t j = 0; j < message_queue.messages[i].data_length; j++) { 
-            printf("%2x ", message_queue.messages[i].data[j]);  
-        }
-        printf("\n");
-#endif
-
+        send_string("01");
         send_data_with_length(message_queue.messages[i].data, message_queue.messages[i].data_length); 
         send_string("\r\n");
 
@@ -105,23 +98,28 @@ void comms_update_rx(comms_status_t *status, uint8_t *data) {
 esp_err_t create_message(comms_message_t* src, void* data, size_t len) { 
 
     uint16_t crc16 = calculate_crc16(data, len);
-    uint8_t crc_arr[2]; 
-    crc_arr[0] = (crc16 >> 8) & 0xff; 
-    crc_arr[1] = (crc16) & 0xff; 
+    uint8_t crc_arr[sizeof(uint16_t)]; 
+    memcpy(crc_arr, &crc16, sizeof(uint16_t)); 
 
-    uint8_t len_arr[4]; 
-    len_arr[0] = ((len + 2) >> 24) & 0xff; 
-    len_arr[1] = ((len + 2) >> 16) & 0xff; 
-    len_arr[2] = ((len + 2) >> 8) & 0xff; 
-    len_arr[3] = ((len + 2)) & 0xff; 
+    // crc_arr[0] = (crc16 >> 8) & 0xff; 
+    // crc_arr[1] = (crc16) & 0xff; 
 
-    src->data = (uint8_t*)malloc(sizeof(uint8_t) * len + 6); 
+    len = len + sizeof(uint16_t);
+
+    uint8_t len_arr[sizeof(size_t)]; 
+    memcpy(len_arr, &len, sizeof(size_t)); 
+    // len_arr[0] = ((len + 2) >> 24) & 0xff; 
+    // len_arr[1] = ((len + 2) >> 16) & 0xff; 
+    // len_arr[2] = ((len + 2) >> 8) & 0xff; 
+    // len_arr[3] = ((len + 2)) & 0xff; 
+
+    src->data = (uint8_t*)malloc(sizeof(uint8_t) * len + (sizeof(uint16_t) + sizeof(size_t))); 
     
-    memcpy(src->data, len_arr, 4); 
-    memcpy(src->data + 4, data, len); 
-    memcpy(src->data + len, crc_arr, 2); 
+    memcpy(src->data, len_arr, sizeof(uint16_t)); 
+    memcpy(src->data + sizeof(uint16_t) + 1, data, len - sizeof(size_t)); 
+    memcpy(src->data + (len - sizeof(size_t)) + 1, crc_arr, 2); 
 
-    src->data_length = len + 6; 
+    src->data_length = len + sizeof(size_t) + sizeof(uint16_t); 
 
     return ESP_OK; 
 }
@@ -165,6 +163,13 @@ int send_string(char* data) {
 int send_data_with_length(uint8_t* data, size_t len) {
     if(!comms_initialized || len <= 0)
         return 0; 
+
+#ifdef COMMS_DEBUG
+    for(size_t i = 0; i < len; i++) { 
+        printf("%2x ", data[i]);  
+    }
+    printf("\n");
+#endif
 
     return uart_write_bytes(UART_CHANNEL, data, len);
 }
