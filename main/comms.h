@@ -8,6 +8,7 @@
 
 typedef struct comms_status_t { 
     bool sniff; 
+    bool update; 
     can_config_t current_config; 
 } comms_status_t; 
 

@@ -37,8 +37,8 @@ void init(void) {
 
 static void can_bus_task(void *arg) { 
     // ESP_ERROR_CHECK(can_bus_init(can_bus_config)); 
-
     while(1) {
+
         if(!prog_status.sniff)
         {
             ESP_ERROR_CHECK(can_bus_cleanup()); 
@@ -80,6 +80,6 @@ void app_main(void)
     init();
 
     xTaskCreatePinnedToCore(can_bus_task, "canbus", 1024*2, NULL, configMAX_PRIORITIES, &sniff_handle, 1); 
-    xTaskCreatePinnedToCore(comms_tx_task, "uart_tx_task", 1024*2, NULL, configMAX_PRIORITIES-1, NULL, 0);
-    xTaskCreatePinnedToCore(comms_rx_task, "uart_rx_task", 1024*2, NULL, configMAX_PRIORITIES-2, NULL, 0);
+    xTaskCreatePinnedToCore(comms_tx_task, "uart_tx_task", 2048*2, NULL, configMAX_PRIORITIES-1, NULL, 0);
+    xTaskCreatePinnedToCore(comms_rx_task, "uart_rx_task", 2048*2, NULL, configMAX_PRIORITIES-2, NULL, 0);
 }

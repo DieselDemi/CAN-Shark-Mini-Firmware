@@ -22,11 +22,14 @@ bool initialized = false;
  * @return esp_err_t 
  */
 esp_err_t ota_init() {
+    if(initialized) 
+        return ESP_OK;
+
     update_partition = esp_ota_get_next_update_partition(NULL); 
     assert(update_partition != NULL); 
 
-    //Use OTA_SIZE_UNKNOWN to erase the entire partition 
-    last_err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle); 
+    //Use OTA_WITH_SEQUENTIAL_WRITES to allow us to update 1kb at a time 
+    last_err = esp_ota_begin(update_partition, OTA_WITH_SEQUENTIAL_WRITES, &ota_handle); 
 
     if(last_err != ESP_OK)
         return last_err; 
@@ -50,7 +53,7 @@ esp_err_t ota_do_update(void* image, size_t size) {
     if(image == NULL || size == 0) 
         return ESP_ERR_IMAGE_INVALID;
 
-    if(!initialized || last_err != ESP_OK)
+    if(!initialized)
         return ESP_ERR_INVALID_STATE; 
 
     return (last_err = esp_ota_write(ota_handle, image, size));
@@ -65,23 +68,17 @@ void ota_cleanup() {
     if(!initialized)
         last_err = ESP_ERR_INVALID_STATE; 
 
-    if(last_err != ESP_OK) {
-        ESP_LOGE("OTA", "SOMETHING WENT WRONG DURING UPDATE");
-        return; 
-    }
-
     last_err = esp_ota_end(ota_handle); 
 
     if(last_err != ESP_OK) {
-        ESP_LOGE("OTA", "SOMETHING WENT WRONG DURING UPDATE");
+        ESP_LOGE("OTA", "SOMETHING WENT WRONG DURING UPDATE - OTA END");
         return; 
     }
-
 
     last_err = esp_ota_set_boot_partition(update_partition); 
 
     if(last_err != ESP_OK) {
-        ESP_LOGE("OTA", "SOMETHING WENT WRONG DURING UPDATE");
+        ESP_LOGE("OTA", "SOMETHING WENT WRONG DURING UPDATE - SET BOOT");
         return; 
     }
     
@@ -120,7 +117,9 @@ esp_err_t ota_do_after_update() {
         return last_err; 
 
     if(img_state == ESP_OTA_IMG_PENDING_VERIFY)
-        esp_ota_mark_app_valid_cancel_rollback(); 
+        last_err = esp_ota_mark_app_valid_cancel_rollback(); 
+
+    printf("RUNNING ON OTA!!!!");
 
     return last_err; 
 }

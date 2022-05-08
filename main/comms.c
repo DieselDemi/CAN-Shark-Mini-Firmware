@@ -4,6 +4,18 @@
 #include <stdbool.h>
 
 #include <esp_log.h>
+#include <driver/gpio.h>
+#include <driver/uart.h>
+#include <sdkconfig.h>
+#include <esp_intr_alloc.h>
+
+#if CONFIG_IDF_TARGET_ESP32
+    #include "esp32/rom/uart.h"
+#elif CONFIG_IDF_TARGET_ESP32S2
+    #include "esp32s2/rom/uart.h"
+#endif
+
+#include "ota.h"
 
 int send_string(char* data); 
 int send_data_with_length(uint8_t* data, size_t len); 
@@ -25,6 +37,9 @@ uint16_t calculate_crc16(uint8_t* data, size_t len);
  * @return esp_err_t ESP_OK if everything worked
  */
 esp_err_t comms_init() { 
+
+    esp_log_level_set("*", CONFIG_LOG_MAXIMUM_LEVEL);
+
     //Allocate the message queue
     message_queue.messages = (comms_message_t*)malloc(sizeof(comms_message_t) * MESSAGE_QUEUE_LEN); 
     memset(message_queue.messages, 0, sizeof(comms_message_t) * MESSAGE_QUEUE_LEN);
@@ -73,10 +88,47 @@ void comms_update_tx() {
  * 
  * @param data 
  */
-void comms_update_rx(comms_status_t *status, uint8_t *data) { 
+size_t update_progress_count = 0; 
+size_t update_size = 0; 
+uint8_t* update_buffer = NULL; 
+
+void comms_update_rx(comms_status_t *status, uint8_t *data) {
+    //If in update mode, we take all incoming data to do the update
+    if(status->update) {     
+        ESP_LOGD("COMMS - UPDATE", "Starting update"); 
+
+        while(update_progress_count != update_size) {             
+            int update_byte_count = uart_read_bytes(UART_CHANNEL, update_buffer, RX_BUF_SIZE, 1000 / portTICK_PERIOD_MS); 
+
+            printf("Update count: %i\n", update_byte_count); 
+
+            if(update_byte_count < 0) { 
+                ESP_LOGE("COMMS - UPDATE", "Invalid data recieved"); 
+                abort(); 
+            } else if(update_byte_count > 0) { 
+                ESP_ERROR_CHECK(ota_do_update(update_buffer, update_byte_count)); 
+                            
+                update_progress_count += update_byte_count;
+                printf("Progress: %i of %i\n", update_progress_count, update_size);
+                ESP_LOGD("COMMS - UPDATE", "Progress: %i of %i\n", update_progress_count, update_size);
+            }
+        } 
+
+        status->update = false; 
+        ota_cleanup();
+        // send_data_with_length(update_data, update_size);
+        send_string("Update Complete. Restarting...");
+
+        return;
+    }
+
     const int rx_bytes = uart_read_bytes(UART_CHANNEL, data, RX_BUF_SIZE, 100 / portTICK_PERIOD_MS);
+    
+    assert(rx_bytes <= RX_BUF_SIZE); 
+
     if (rx_bytes > 0) {
-        data[rx_bytes] = 0;
+        // data[rx_bytes] = 0;
+        ESP_LOGD("COMMS - UPDATE", "DATA INCOMING: %i\n", rx_bytes);
 
         if(*data == (uint8_t)'m') {
             status->sniff = true; 
@@ -84,7 +136,32 @@ void comms_update_rx(comms_status_t *status, uint8_t *data) {
         if(*data == (uint8_t)'n') {
             status->sniff = false; 
         }
+
+        if(*data == (uint8_t)'u') { 
+            //Quick assertion that the buffer has atleast the correct amount of bytes
+            assert(rx_bytes >= sizeof(size_t) + 1);
+
+            memcpy(&update_size, data + 1, sizeof(size_t));                
+            
+            ESP_LOGD("COMMS - UPDATE", "Update - Size: %i\n", update_size); 
+
+            uart_flush(UART_CHANNEL); 
+
+            update_buffer = (uint8_t*)malloc(sizeof(uint8_t) * RX_BUF_SIZE); 
+
+            if(update_buffer == NULL) { 
+                ESP_LOGE("COMMS - UPDATE", "Could not allocate memory for update buffer"); 
+                abort(); 
+            }
+
+            ESP_ERROR_CHECK(ota_init());
+
+            status->update = true; 
+        }
+
+        
     }
+
 }
 
 /**
