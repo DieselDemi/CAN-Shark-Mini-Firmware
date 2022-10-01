@@ -12,7 +12,7 @@
 const esp_partition_t *update_partition = NULL; 
 esp_ota_handle_t ota_handle; 
 
-esp_err_t last_err; 
+static esp_err_t last_err; 
 
 bool initialized = false; 
 
@@ -51,7 +51,7 @@ esp_err_t ota_init() {
  */
 esp_err_t ota_do_update(void* image, size_t size) { 
     if(image == NULL || size == 0) 
-        return ESP_ERR_IMAGE_INVALID;
+        return ESP_OTA_IMG_INVALID;
 
     if(!initialized)
         return ESP_ERR_INVALID_STATE; 

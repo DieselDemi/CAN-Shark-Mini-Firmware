@@ -1,6 +1,6 @@
 #include "can_bus.h"
 #include "comms.h"
-
+#include "esp_timer.h"
 #include <string.h>
 
 /// Private variables
@@ -159,14 +159,19 @@ esp_err_t generate_message(comms_message_t *message, long long time, can_message
     time_arr[6] = (time >> 8) & 0xff; 
     time_arr[7] = (time) & 0xff;
 
-    uint8_t data_arr[data_len + 14]; 
+    size_t message_data_arr_size = data_len + 8 + 2 + 4; 
+    // size_t padding_size = TWAI_FRAME_MAX_DLC - data_len;
+    uint8_t message_data_arr[message_data_arr_size]; 
 
-    memcpy(data_arr, time_arr, 8);
-    memcpy(data_arr + 8, type_arr, 2);  
-    memcpy(data_arr + 10, id_arr, 4); 
-    memcpy(data_arr + 14, data, data_len); 
+    memcpy(message_data_arr, time_arr, 8);
+    memcpy(message_data_arr + 9, type_arr, 2);  
+    memcpy(message_data_arr + 11, id_arr, 4); 
+    memcpy(message_data_arr + 15, data, data_len); 
+    
+    // if(padding_size > 0)
+    //     memset(message_data_arr + (14 + data_len), 0xff, padding_size); 
 
-    create_message(message, data_arr, data_len + 14); 
+    create_message(message, message_data_arr, message_data_arr_size); 
 
     return ESP_OK; 
 }

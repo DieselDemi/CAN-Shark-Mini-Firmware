@@ -5,6 +5,8 @@
 #include "driver/uart.h"
 #include "string.h"
 #include "driver/gpio.h"
+#include "nvs_flash.h"
+#include "nvs.h"
 
 #include "defines.h"
 #include "comms.h"
@@ -77,7 +79,9 @@ static void comms_rx_task(void *arg)
 
 void app_main(void)
 {
-    init();
+    nvs_flash_init(); 
+
+    init(); 
 
     xTaskCreatePinnedToCore(can_bus_task, "canbus", 1024*2, NULL, configMAX_PRIORITIES, &sniff_handle, 1); 
     xTaskCreatePinnedToCore(comms_tx_task, "uart_tx_task", 2048*2, NULL, configMAX_PRIORITIES-1, NULL, 0);
