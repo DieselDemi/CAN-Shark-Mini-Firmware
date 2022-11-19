@@ -93,7 +93,7 @@ size_t update_progress_count = 0;
 size_t update_size = 0; 
 uint8_t* update_buffer = NULL; 
 
-void comms_update_rx(comms_status_t *status, uint8_t *data) {
+void comms_update_rx(comms_status_t *status, char *data) {
     //If in update mode, we take all incoming data to do the update
     if(status->update) {     
         ESP_LOGD("COMMS - UPDATE", "Starting update"); 
@@ -124,21 +124,21 @@ void comms_update_rx(comms_status_t *status, uint8_t *data) {
     }
 
     const int rx_bytes = uart_read_bytes(UART_CHANNEL, data, RX_BUF_SIZE, 100 / portTICK_PERIOD_MS);
-    
+
     assert(rx_bytes <= RX_BUF_SIZE); 
 
     if (rx_bytes > 0) {
         // data[rx_bytes] = 0;
         ESP_LOGD("COMMS - UPDATE", "DATA INCOMING: %i\n", rx_bytes);
 
-        if(*data == (uint8_t)'m') {
+        if(strcmp(data, "m") == 0) {
             status->sniff = true; 
         } 
-        if(*data == (uint8_t)'n') {
+        if(strcmp(data, "n") == 0) {
             status->sniff = false; 
         }
 
-        if(*data == (uint8_t)'u') { 
+        if(strcmp(data, "u") == 0) { 
             //Quick assertion that the buffer has atleast the correct amount of bytes
             assert(rx_bytes >= sizeof(size_t) + 1);
 
@@ -159,8 +159,7 @@ void comms_update_rx(comms_status_t *status, uint8_t *data) {
 
             status->update = true; 
         }
-
-        
+       
     }
 
 }

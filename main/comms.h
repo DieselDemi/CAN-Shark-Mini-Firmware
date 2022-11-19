@@ -18,7 +18,7 @@ typedef struct comms_message_t {
 } comms_message_t; 
 
 void comms_update_tx(); 
-void comms_update_rx(comms_status_t* status, uint8_t *data); 
+void comms_update_rx(comms_status_t* status, char *data); 
 
 void add_message(comms_message_t message); 
 

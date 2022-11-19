@@ -68,10 +68,13 @@ static void comms_tx_task(void *arg)
 
 static void comms_rx_task(void *arg)
 {
-    uint8_t* data = (uint8_t*) malloc(RX_BUF_SIZE + 1); //Allocate a recieve buffer for the max buffer size pluss null
+    char* data = (char*) malloc(RX_BUF_SIZE + 1); //Allocate a recieve buffer for the max buffer size plus null
+    memset(data, 0, RX_BUF_SIZE + 1); // Clear the data 
 
     while (1) {
         comms_update_rx(&prog_status, data);
+        size_t filledSize = strlen(data); 
+        memset(data, 0, filledSize); 
     }
 
     free(data);
