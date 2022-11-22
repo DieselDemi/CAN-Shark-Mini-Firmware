@@ -8,6 +8,9 @@
 #include <driver/uart.h>
 #include <sdkconfig.h>
 #include <esp_intr_alloc.h>
+#include <lwip/sockets.h>
+#include <esp_heap_caps.h>
+
 
 #if CONFIG_IDF_TARGET_ESP32
     #include "esp32/rom/uart.h"
@@ -165,31 +168,49 @@ void comms_update_rx(comms_status_t *status, char *data) {
 }
 
 /**
- * @brief Create a message object
+ * @brief Create a message
  * 
  * @param src 
  * @param data 
  * @param len 
  * @return comms_message_t 
  */
-esp_err_t create_message(comms_message_t* src, void* data, size_t len) { 
+esp_err_t create_message(comms_message_t* src, void* data, uint32_t len) { 
+    // Calculate the CRC16 and convert it to network byte order
+    size_t crc_arr_len = sizeof(uint16_t);
+    uint8_t crc_arr[crc_arr_len]; 
+    uint16_t crc16 = htons(calculate_crc16(data, len));
+    memcpy(crc_arr, &crc16, crc_arr_len); 
 
-    uint16_t crc16 = calculate_crc16(data, len);
-    uint8_t crc_arr[sizeof(uint16_t)]; 
-    memcpy(crc_arr, &crc16, sizeof(uint16_t)); 
+    // Create a temporary data length variable
+    size_t data_len = len; 
 
-    len = len + sizeof(uint16_t);
+    // Convert the length to network byte order and set it to the length array
+    size_t message_len_arr_len = sizeof(uint32_t); 
+    uint8_t message_len_arr[message_len_arr_len]; 
+    uint32_t net_len = htonl(len); 
+    memcpy(message_len_arr, &net_len, message_len_arr_len);
 
-    uint8_t len_arr[sizeof(size_t)]; 
-    memcpy(len_arr, &len, sizeof(size_t));
+    // Allocate the memory in the message struct to send 
+    size_t message_data_len = message_len_arr_len + data_len + crc_arr_len;
+    // free(src->data); // Bug ??? 
+    // printf("Message Data Len: %dbytes Heap Free: %ldbytes\n", message_data_len, xPortGetFreeHeapSize()); 
 
-    src->data = (uint8_t*)malloc(sizeof(uint8_t) * len + sizeof(size_t)); 
-    
-    memcpy(src->data, len_arr, sizeof(size_t)); 
-    memcpy(src->data + sizeof(size_t) + 1, data, len - sizeof(uint16_t)); 
-    memcpy(src->data + (len - sizeof(uint16_t)) + 1, crc_arr, sizeof(uint16_t)); 
+    if(xPortGetFreeHeapSize() < message_data_len) 
+        return ESP_ERR_NO_MEM;
+ 
+    src->data = (uint8_t*)malloc(sizeof(uint8_t) * message_data_len); 
+    memset(src->data, 0, message_data_len);
 
-    src->data_length = len + sizeof(size_t); 
+    // Copy the length to the beggining on the data array
+    memcpy(src->data, message_len_arr, message_len_arr_len); 
+    // Copy the CAN data to the message data after the length
+    memcpy(src->data + message_len_arr_len, data, data_len); 
+    // Copy the crc16 data at the end of the message data
+    memcpy(src->data + message_len_arr_len + data_len, crc_arr, crc_arr_len); 
+
+    // Set the total length of the message data (message length + data length array length)
+    src->data_length = message_data_len;
 
     return ESP_OK; 
 }
@@ -199,13 +220,15 @@ esp_err_t create_message(comms_message_t* src, void* data, size_t len) {
  * 
  * @param message message data
  */
-void add_message(comms_message_t message) {
+void add_message(comms_message_t* message) {
     if(message_queue.count > MESSAGE_QUEUE_LEN) {
         ESP_LOGE("COMMS", "MESSAGE QUEUE OVERRUN"); 
         return; 
     }
 
-    message_queue.messages[message_queue.count++] = message; 
+    assert(message != NULL); 
+
+    message_queue.messages[message_queue.count++] = *message; 
 }
 
 /**

@@ -2,15 +2,16 @@
 #include "comms.h"
 #include "esp_timer.h"
 #include <string.h>
+#include <lwip/sockets.h>
 
 /// Private variables
-long long microsecond_time; 
-long long last_time; 
+int64_t microsecond_time; 
+int64_t last_microsecond_time; 
 
 esp_err_t last_err; 
 
 /// Private function pre declarations
-esp_err_t generate_message(comms_message_t *message, long long time, can_message_type message_type, uint32_t id, void* data, size_t data_len); 
+esp_err_t generate_message(comms_message_t *message, uint32_t time, can_message_type message_type, uint32_t id, void* data, size_t data_len); 
 
 /**
  * @brief Initialize the CAN Bus driver
@@ -46,7 +47,7 @@ esp_err_t can_bus_init(can_config_t settings) {
 
     //Initialize our time variables
     microsecond_time = 0; 
-    last_time = 0; 
+    last_microsecond_time = 0; 
 
     return last_err; 
 }
@@ -66,31 +67,12 @@ esp_err_t can_bus_update() {
         return ESP_OK; 
     }
 
-    //If the message is not a remote CAN frame, send the regular data
-    //else send a message containing just the time, ID, and type.  
-    if(!message.rtr) {
-        microsecond_time = esp_timer_get_time(); 
+    microsecond_time = esp_timer_get_time(); 
+    last_err = generate_message(&com_message, microsecond_time - last_microsecond_time, message.rtr ? REMOTE_FRAME : STANDARD_FRAME, message.identifier, message.data, message.data_length_code); 
+    add_message(&com_message); 
+    last_microsecond_time = microsecond_time; 
 
-        generate_message(&com_message, microsecond_time - last_time, STANDARD_FRAME, message.identifier, message.data, message.data_length_code);
-        add_message(com_message);
-
-// #ifdef CAN_DEBUG
-//         for(int i = 0; i < message.data_length_code; i++) { 
-//             printf("%i ", message.data[i]);  
-//         }
-//         printf("\n"); 
-// #endif
-        last_time = microsecond_time; 
-    } else { 
-        microsecond_time = esp_timer_get_time(); 
-
-        generate_message(&com_message, microsecond_time - last_time, REMOTE_FRAME, message.identifier, NULL, 0);
-        add_message(com_message);
-
-        last_time = microsecond_time; 
-    }    
-
-    return ESP_OK; 
+    return last_err; 
 }
 
 /**
@@ -136,42 +118,36 @@ esp_err_t can_bus_cleanup() {
  * @param data_len 
  * @return esp_err_t 
  */
-esp_err_t generate_message(comms_message_t *message, long long time, can_message_type message_type, uint32_t id, void* data, size_t data_len) { 
-    uint16_t type = (uint16_t)message_type;
+esp_err_t generate_message(comms_message_t *message, uint32_t time, can_message_type message_type, uint32_t id, void* data, size_t data_len) { 
+    //NOTE: This could be done with a few memcpy's however I think by unrolling the loop and bitwise shifting its actually slightly faster
 
-    uint8_t type_arr[2]; 
-    type_arr[0] = (type >> 8) & 0xff; 
-    type_arr[1] = (type) & 0xff; 
+    // Translate the message type and convert it to a byte array
+    size_t type_arr_len = sizeof(uint16_t);
+    uint8_t type_arr[type_arr_len]; 
+    uint16_t net_type = htons((uint16_t)message_type); // Convert to network byte order
+    memcpy(type_arr, &net_type, type_arr_len); 
 
-    uint8_t id_arr[4]; 
-    id_arr[0] = (id >> 24) & 0xff; 
-    id_arr[1] = (id >> 16) & 0xff; 
-    id_arr[2] = (id >> 8) & 0xff; 
-    id_arr[3] = (id) & 0xff; 
+    // Convert the ID to a byte array
+    size_t id_arr_len = sizeof(uint32_t);
+    uint8_t id_arr[id_arr_len]; 
+    uint32_t net_id = htonl(id); 
+    memcpy(id_arr, &net_id, id_arr_len); 
 
-    uint8_t time_arr[8]; 
-    time_arr[0] = (time >> 56) & 0xff; 
-    time_arr[1] = (time >> 48) & 0xff; 
-    time_arr[2] = (time >> 40) & 0xff; 
-    time_arr[3] = (time >> 32) & 0xff; 
-    time_arr[4] = (time >> 24) & 0xff; 
-    time_arr[5] = (time >> 16) & 0xff; 
-    time_arr[6] = (time >> 8) & 0xff; 
-    time_arr[7] = (time) & 0xff;
+    // Convert the time to a byte array
+    size_t time_arr_len = sizeof(uint32_t); 
+    uint8_t time_arr[time_arr_len]; 
+    long net_time = htonl(time); 
+    memcpy(time_arr, &net_time, time_arr_len); 
 
-    size_t message_data_arr_size = data_len + 8 + 2 + 4; 
-    // size_t padding_size = TWAI_FRAME_MAX_DLC - data_len;
-    uint8_t message_data_arr[message_data_arr_size]; 
+    size_t message_data_arr_len = type_arr_len + id_arr_len + time_arr_len + data_len; 
+    uint8_t message_data_arr[message_data_arr_len]; 
+    memset(message_data_arr, 0, message_data_arr_len);
 
-    memcpy(message_data_arr, time_arr, 8);
-    memcpy(message_data_arr + 9, type_arr, 2);  
-    memcpy(message_data_arr + 11, id_arr, 4); 
-    memcpy(message_data_arr + 15, data, data_len); 
+    memcpy(message_data_arr, time_arr, time_arr_len);
+    memcpy(message_data_arr + time_arr_len, type_arr, type_arr_len);  
+    memcpy(message_data_arr + time_arr_len + type_arr_len, id_arr, id_arr_len); 
+    memcpy(message_data_arr + time_arr_len + type_arr_len + id_arr_len, data, data_len); 
     
-    // if(padding_size > 0)
-    //     memset(message_data_arr + (14 + data_len), 0xff, padding_size); 
-
-    create_message(message, message_data_arr, message_data_arr_size); 
-
-    return ESP_OK; 
+    // printf("create_message(message, message_data_arr, %d);\n", message_data_arr_len);
+    return create_message(message, message_data_arr, message_data_arr_len); 
 }

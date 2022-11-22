@@ -18,8 +18,8 @@
 #define TAG "CAN BUS"
 
 typedef enum can_message_type { 
-    STANDARD_FRAME, 
-    REMOTE_FRAME
+    STANDARD_FRAME = 0, 
+    REMOTE_FRAME = 1
 } can_message_type; 
 
 typedef struct can_config_t { 

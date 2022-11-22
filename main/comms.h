@@ -20,9 +20,9 @@ typedef struct comms_message_t {
 void comms_update_tx(); 
 void comms_update_rx(comms_status_t* status, char *data); 
 
-void add_message(comms_message_t message); 
+void add_message(comms_message_t* message); 
 
-esp_err_t create_message(comms_message_t *src, void *data, size_t len); 
+esp_err_t create_message(comms_message_t *src, void *data, uint32_t len); 
 esp_err_t comms_init(); 
 
 void clear_screen(); 
