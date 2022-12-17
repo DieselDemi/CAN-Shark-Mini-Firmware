@@ -89,4 +89,9 @@ void app_main(void)
     xTaskCreatePinnedToCore(can_bus_task, "canbus", 1024*2, NULL, configMAX_PRIORITIES, &sniff_handle, 1); 
     xTaskCreatePinnedToCore(comms_tx_task, "uart_tx_task", 2048*2, NULL, configMAX_PRIORITIES-1, NULL, 0);
     xTaskCreatePinnedToCore(comms_rx_task, "uart_rx_task", 2048*2, NULL, configMAX_PRIORITIES-2, NULL, 0);
+
+    vTaskDelay(10 / portTICK_PERIOD_MS);
+
+    printf("\n");
+    printf("READY\n");
 }

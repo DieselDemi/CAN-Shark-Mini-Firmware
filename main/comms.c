@@ -55,7 +55,7 @@ esp_err_t comms_init() {
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_APB,
+        .source_clk = UART_SCLK_DEFAULT,
     };
 
     esp_err_t last_err = ESP_OK; 
@@ -64,6 +64,8 @@ esp_err_t comms_init() {
     last_err = uart_driver_install(UART_CHANNEL, RX_BUF_SIZE * 2, 0, 0, NULL, 0);
     last_err = uart_param_config(UART_CHANNEL, &uart_config);
     last_err = uart_set_pin(UART_CHANNEL, UART_TXD_PIN, UART_RXD_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+
+    uart_set_mode(UART_CHANNEL, UART_MODE_UART);
 
     comms_initialized = last_err == ESP_OK; 
 
@@ -134,6 +136,8 @@ void comms_update_rx(comms_status_t *status, char *data) {
         // data[rx_bytes] = 0;
         ESP_LOGD("COMMS - UPDATE", "DATA INCOMING: %i\n", rx_bytes);
 
+        // printf("%s\n", data);
+
         if(strcmp(data, "m") == 0) {
             status->sniff = true; 
         } 
@@ -147,6 +151,8 @@ void comms_update_rx(comms_status_t *status, char *data) {
 
             memcpy(&update_size, data + 1, sizeof(size_t));                
             
+            update_size = ntohl(update_size); 
+
             ESP_LOGD("COMMS - UPDATE", "Update - Size: %i\n", update_size); 
 
             uart_flush(UART_CHANNEL); 

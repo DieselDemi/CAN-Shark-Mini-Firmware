@@ -22,5 +22,21 @@ LENGTH   TIME             TYPE ID       DATA               CRC16
 <00000012 00002710 00 00000000C9 0000000700410800 8663>
 
 
-LENGTH     TIME    TYPE ID         DATA            CRC16
-<00000012 00002710 00 0000000191 05CB05CB05920000 C00F>
+typedef struct message { 
+    uint32_t message_len; 
+    uint32_t delta_t_us;
+    uint8_t  type_id;
+    uint32_t can_id; 
+    uint8_t  data[8]; 
+    uint16_t crc16; 
+} message; 
+
+ LENGTH   TIME     TYPE ID         DATA             CRC16
+<00000012 00002710 0000 00000191 05CB05CB05920000 C00F>
+
+ 00000012000027020000000001ED81900000000004CA1633
+
+ 00000012 00002710 0000 000000c9 0000000a00410800 ed36 
+ Len: 18 Delta us Time: 10000 Type: 0 ID: 0 Can Data Length: 7 CRC16: 2048
+
+00000012 00002710 0000 00000191 05cb05cb05920000 c00f 
